@@ -48,6 +48,25 @@ const upload = multer({
   limits: { fileSize: config.MAX_FILE_SIZE },
 });
 
+// Map old model names to new ones for backward compatibility
+const MODEL_MIGRATION_MAP: Record<string, string> = {
+  // Old Claude 3.5 models
+  'claude-3-5-sonnet-20241022': 'claude-sonnet-4-20250514',
+  'claude-3-5-sonnet': 'claude-sonnet-4-20250514',
+  'claude-3-opus': 'claude-opus-4-20250514',
+  'claude-3-opus-20240229': 'claude-opus-4-20250514',
+  // Old Claude 3 Haiku (map to Sonnet)
+  'claude-3-haiku': 'claude-sonnet-4-20250514',
+  'claude-3-haiku-20240307': 'claude-sonnet-4-20250514',
+};
+
+const VALID_MODELS = ['claude-sonnet-4-20250514', 'claude-opus-4-20250514'];
+
+function migrateModelName(model: string): string {
+  if (VALID_MODELS.includes(model)) return model;
+  return MODEL_MIGRATION_MAP[model] || 'claude-sonnet-4-20250514';
+}
+
 // Validation schemas
 const createProjectSchema = z.object({
   name: z.string().min(1).max(255),
@@ -57,10 +76,7 @@ const createProjectSchema = z.object({
     'standard', 'formal', 'informal', 'technical', 'legal',
     'marketing', 'literary', 'medical', 'academic', 'conversational',
   ]).default('standard'),
-  aiModel: z.enum([
-    'claude-sonnet-4-20250514',
-    'claude-opus-4-20250514',
-  ]).default('claude-sonnet-4-20250514'),
+  aiModel: z.string().default('claude-sonnet-4-20250514').transform(migrateModelName),
   customContext: z.string().optional(), // Additional instructions for translation
   dueDate: z.string().optional(),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
@@ -76,10 +92,7 @@ const updateProjectSchema = z.object({
     'standard', 'formal', 'informal', 'technical', 'legal',
     'marketing', 'literary', 'medical', 'academic', 'conversational',
   ]).optional(),
-  aiModel: z.enum([
-    'claude-sonnet-4-20250514',
-    'claude-opus-4-20250514',
-  ]).optional(),
+  aiModel: z.string().optional().transform((val) => val ? migrateModelName(val) : undefined),
   customContext: z.string().nullable().optional(),
 });
 
