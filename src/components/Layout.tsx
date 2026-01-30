@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard,
   FileText,
+  FolderKanban,
   Book,
   Mic,
   Settings,
@@ -18,6 +19,7 @@ import { useTheme } from '../hooks/useTheme';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Projects', href: '/projects', icon: FolderKanban },
   { name: 'Glossaries', href: '/glossaries', icon: Book },
   { name: 'Audio', href: '/audio', icon: Mic },
   { name: 'Settings', href: '/settings', icon: Settings },

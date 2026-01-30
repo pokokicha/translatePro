@@ -11,7 +11,8 @@ import {
 import { toast } from 'sonner';
 import { projectsApi } from '../lib/api';
 import { useStore } from '../store/useStore';
-import { LANGUAGES, AI_MODELS, TRANSLATION_STYLES } from '@shared/types';
+import { LANGUAGES, AI_MODELS, TRANSLATION_STYLES, PRIORITIES } from '@shared/types';
+import type { ProjectPriority } from '@shared/types';
 
 export default function NewProject() {
   const navigate = useNavigate();
@@ -24,6 +25,9 @@ export default function NewProject() {
   const [targetLanguage, setTargetLanguage] = useState(defaultTargetLanguage);
   const [style, setStyle] = useState(defaultStyle);
   const [model, setModel] = useState(defaultModel);
+  const [dueDate, setDueDate] = useState('');
+  const [priority, setPriority] = useState<ProjectPriority>('medium');
+  const [customContext, setCustomContext] = useState('');
   const [loading, setLoading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
 
@@ -72,6 +76,9 @@ export default function NewProject() {
           targetLanguage,
           translationStyle: style,
           aiModel: model,
+          customContext: customContext || undefined,
+          dueDate: dueDate || undefined,
+          priority,
         },
         file
       );
@@ -267,6 +274,61 @@ export default function NewProject() {
             Cost: ${AI_MODELS.find((m) => m.id === model)?.inputCostPer1M}/1M input tokens,
             ${AI_MODELS.find((m) => m.id === model)?.outputCostPer1M}/1M output tokens
           </p>
+        </div>
+
+        {/* Custom Context / Instructions */}
+        <div>
+          <label htmlFor="customContext" className="label">
+            Custom Instructions (optional)
+          </label>
+          <textarea
+            id="customContext"
+            value={customContext}
+            onChange={(e) => setCustomContext(e.target.value)}
+            placeholder="Add additional context for the AI translator. For example: specific terminology, preferred tone, style guidelines, subject matter context, or any special instructions..."
+            rows={4}
+            className="input resize-none"
+          />
+          <p className="text-sm text-slate-500 mt-1">
+            These instructions will be included in every translation request for this project.
+          </p>
+        </div>
+
+        {/* Due Date and Priority */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="dueDate" className="label">
+              Due Date (optional)
+            </label>
+            <input
+              id="dueDate"
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="input"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="priority" className="label">
+              Priority
+            </label>
+            <div className="relative">
+              <select
+                id="priority"
+                value={priority}
+                onChange={(e) => setPriority(e.target.value as ProjectPriority)}
+                className="input appearance-none pr-10"
+              >
+                {PRIORITIES.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            </div>
+          </div>
         </div>
 
         {/* Submit */}

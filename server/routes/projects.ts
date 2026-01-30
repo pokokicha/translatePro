@@ -60,8 +60,27 @@ const createProjectSchema = z.object({
   aiModel: z.enum([
     'claude-sonnet-4-20250514',
     'claude-opus-4-20250514',
-    'claude-3-5-haiku-20241022',
   ]).default('claude-sonnet-4-20250514'),
+  customContext: z.string().optional(), // Additional instructions for translation
+  dueDate: z.string().optional(),
+  priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
+  tags: z.string().optional(), // comma-separated tags
+});
+
+const updateProjectSchema = z.object({
+  name: z.string().min(1).max(255).optional(),
+  dueDate: z.string().nullable().optional(),
+  priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
+  tags: z.string().nullable().optional(),
+  translationStyle: z.enum([
+    'standard', 'formal', 'informal', 'technical', 'legal',
+    'marketing', 'literary', 'medical', 'academic', 'conversational',
+  ]).optional(),
+  aiModel: z.enum([
+    'claude-sonnet-4-20250514',
+    'claude-opus-4-20250514',
+  ]).optional(),
+  customContext: z.string().nullable().optional(),
 });
 
 // Helper to map DB row to Project type
@@ -76,6 +95,7 @@ function mapRowToProject(row: Record<string, unknown>): Project {
     targetLanguage: row.target_language as Project['targetLanguage'],
     translationStyle: row.translation_style as Project['translationStyle'],
     aiModel: row.ai_model as Project['aiModel'],
+    customContext: row.custom_context as string | null,
     status: row.status as Project['status'],
     progress: row.progress as number,
     totalSegments: row.total_segments as number,
@@ -84,22 +104,102 @@ function mapRowToProject(row: Record<string, unknown>): Project {
     tokensInput: row.tokens_input as number,
     tokensOutput: row.tokens_output as number,
     totalCost: row.total_cost as number,
+    dueDate: row.due_date as string | null,
+    priority: (row.priority as Project['priority']) || 'medium',
+    tags: row.tags ? (row.tags as string).split(',').filter(Boolean) : [],
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
   };
 }
 
-// GET /api/projects - List all projects
-router.get('/', (_req: Request, res: Response) => {
+// GET /api/projects - List all projects with filtering and sorting
+router.get('/', (req: Request, res: Response) => {
   try {
     const db = getDb();
-    const rows = db.prepare(`
-      SELECT * FROM projects
-      ORDER BY created_at DESC
-    `).all() as Record<string, unknown>[];
+
+    // Query parameters for filtering and sorting
+    const {
+      status,
+      priority,
+      sourceLanguage,
+      targetLanguage,
+      search,
+      sortBy = 'created_at',
+      sortOrder = 'desc',
+      limit,
+      offset
+    } = req.query;
+
+    // Build WHERE clauses
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+
+    if (status && status !== 'all') {
+      conditions.push('status = ?');
+      params.push(status);
+    }
+
+    if (priority && priority !== 'all') {
+      conditions.push('priority = ?');
+      params.push(priority);
+    }
+
+    if (sourceLanguage && sourceLanguage !== 'all') {
+      conditions.push('source_language = ?');
+      params.push(sourceLanguage);
+    }
+
+    if (targetLanguage && targetLanguage !== 'all') {
+      conditions.push('target_language = ?');
+      params.push(targetLanguage);
+    }
+
+    if (search) {
+      conditions.push('(name LIKE ? OR file_name LIKE ? OR tags LIKE ?)');
+      const searchPattern = `%${search}%`;
+      params.push(searchPattern, searchPattern, searchPattern);
+    }
+
+    // Validate sort column to prevent SQL injection
+    const validSortColumns = ['created_at', 'updated_at', 'name', 'due_date', 'priority', 'progress', 'status'];
+    const sortColumn = validSortColumns.includes(sortBy as string) ? sortBy : 'created_at';
+    const order = sortOrder === 'asc' ? 'ASC' : 'DESC';
+
+    // Build query
+    let query = 'SELECT * FROM projects';
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
+    }
+    query += ` ORDER BY ${sortColumn} ${order}`;
+
+    if (limit) {
+      query += ` LIMIT ?`;
+      params.push(parseInt(limit as string, 10));
+
+      if (offset) {
+        query += ` OFFSET ?`;
+        params.push(parseInt(offset as string, 10));
+      }
+    }
+
+    const rows = db.prepare(query).all(...params) as Record<string, unknown>[];
+
+    // Get total count for pagination
+    let countQuery = 'SELECT COUNT(*) as total FROM projects';
+    if (conditions.length > 0) {
+      countQuery += ' WHERE ' + conditions.join(' AND ');
+    }
+    const countParams = params.slice(0, conditions.length + (search ? 2 : 0));
+    const countResult = db.prepare(countQuery).get(...countParams) as { total: number };
 
     const projects = rows.map(mapRowToProject);
-    res.json(projects);
+
+    res.json({
+      projects,
+      total: countResult.total,
+      limit: limit ? parseInt(limit as string, 10) : null,
+      offset: offset ? parseInt(offset as string, 10) : 0,
+    });
   } catch (error) {
     logger.error('Failed to list projects:', error);
     res.status(500).json({ error: 'Failed to list projects' });
@@ -141,7 +241,7 @@ router.post('/', upload.single('file'), async (req: Request, res: Response) => {
       return;
     }
 
-    const { name, sourceLanguage, targetLanguage, translationStyle, aiModel } = validation.data;
+    const { name, sourceLanguage, targetLanguage, translationStyle, aiModel, customContext, dueDate, priority, tags } = validation.data;
 
     // Determine file type
     const ext = path.extname(req.file.originalname).toLowerCase();
@@ -157,8 +257,9 @@ router.post('/', upload.single('file'), async (req: Request, res: Response) => {
     db.prepare(`
       INSERT INTO projects (
         id, name, file_name, file_type, file_size, file_path,
-        source_language, target_language, translation_style, ai_model
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        source_language, target_language, translation_style, ai_model,
+        custom_context, due_date, priority, tags
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       projectId,
       name,
@@ -169,7 +270,11 @@ router.post('/', upload.single('file'), async (req: Request, res: Response) => {
       sourceLanguage,
       targetLanguage,
       translationStyle,
-      aiModel
+      aiModel,
+      customContext || null,
+      dueDate || null,
+      priority,
+      tags || null
     );
 
     // Extract content and create segments
@@ -227,6 +332,76 @@ router.post('/', upload.single('file'), async (req: Request, res: Response) => {
       } catch { /* ignore */ }
     }
     res.status(500).json({ error: 'Failed to create project' });
+  }
+});
+
+// PUT /api/projects/:id - Update project
+router.put('/:id', (req: Request, res: Response) => {
+  try {
+    const validation = updateProjectSchema.safeParse(req.body);
+    if (!validation.success) {
+      res.status(400).json({ error: validation.error.errors });
+      return;
+    }
+
+    const db = getDb();
+    const existing = db.prepare('SELECT id FROM projects WHERE id = ?').get(req.params.id);
+
+    if (!existing) {
+      res.status(404).json({ error: 'Project not found' });
+      return;
+    }
+
+    const updates = validation.data;
+    const setClauses: string[] = [];
+    const params: unknown[] = [];
+
+    if (updates.name !== undefined) {
+      setClauses.push('name = ?');
+      params.push(updates.name);
+    }
+    if (updates.dueDate !== undefined) {
+      setClauses.push('due_date = ?');
+      params.push(updates.dueDate);
+    }
+    if (updates.priority !== undefined) {
+      setClauses.push('priority = ?');
+      params.push(updates.priority);
+    }
+    if (updates.tags !== undefined) {
+      setClauses.push('tags = ?');
+      params.push(updates.tags);
+    }
+    if (updates.translationStyle !== undefined) {
+      setClauses.push('translation_style = ?');
+      params.push(updates.translationStyle);
+    }
+    if (updates.aiModel !== undefined) {
+      setClauses.push('ai_model = ?');
+      params.push(updates.aiModel);
+    }
+    if (updates.customContext !== undefined) {
+      setClauses.push('custom_context = ?');
+      params.push(updates.customContext);
+    }
+
+    if (setClauses.length === 0) {
+      res.status(400).json({ error: 'No fields to update' });
+      return;
+    }
+
+    setClauses.push("updated_at = datetime('now')");
+    params.push(req.params.id);
+
+    db.prepare(`
+      UPDATE projects SET ${setClauses.join(', ')} WHERE id = ?
+    `).run(...params);
+
+    const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(req.params.id) as Record<string, unknown>;
+    res.json(mapRowToProject(project));
+  } catch (error) {
+    logger.error('Failed to update project:', error);
+    res.status(500).json({ error: 'Failed to update project' });
   }
 });
 

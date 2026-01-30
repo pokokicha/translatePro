@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS projects (
   target_language TEXT NOT NULL,
   translation_style TEXT NOT NULL DEFAULT 'standard',
   ai_model TEXT NOT NULL DEFAULT 'claude-sonnet-4-20250514',
+  custom_context TEXT,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'error')),
   progress REAL NOT NULL DEFAULT 0,
   total_segments INTEGER NOT NULL DEFAULT 0,
@@ -22,6 +23,9 @@ CREATE TABLE IF NOT EXISTS projects (
   tokens_output INTEGER NOT NULL DEFAULT 0,
   total_cost REAL NOT NULL DEFAULT 0,
   error_message TEXT,
+  due_date TEXT,
+  priority TEXT NOT NULL DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high', 'urgent')),
+  tags TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -113,6 +117,18 @@ CREATE INDEX IF NOT EXISTS idx_glossary_terms_glossary_id ON glossary_terms(glos
 CREATE INDEX IF NOT EXISTS idx_glossary_terms_source ON glossary_terms(source_term);
 CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);
 CREATE INDEX IF NOT EXISTS idx_projects_created_at ON projects(created_at);
+CREATE INDEX IF NOT EXISTS idx_projects_due_date ON projects(due_date);
+CREATE INDEX IF NOT EXISTS idx_projects_priority ON projects(priority);
+`;
+
+// Migration for existing databases
+export const migrations = `
+-- Add due_date column if not exists
+ALTER TABLE projects ADD COLUMN due_date TEXT;
+-- Add priority column if not exists
+ALTER TABLE projects ADD COLUMN priority TEXT NOT NULL DEFAULT 'medium';
+-- Add tags column if not exists
+ALTER TABLE projects ADD COLUMN tags TEXT;
 `;
 
 export default schema;

@@ -51,8 +51,8 @@ export const TRANSLATION_STYLES: TranslationStyleInfo[] = [
   { id: 'conversational', name: 'Conversational', description: 'Natural dialogue, spoken style' },
 ];
 
-// AI Models
-export type AIModel = 'claude-sonnet-4-20250514' | 'claude-opus-4-20250514' | 'claude-3-5-haiku-20241022';
+// AI Models - Latest versions only
+export type AIModel = 'claude-sonnet-4-20250514' | 'claude-opus-4-20250514';
 
 export interface AIModelInfo {
   id: AIModel;
@@ -66,28 +66,37 @@ export const AI_MODELS: AIModelInfo[] = [
   {
     id: 'claude-sonnet-4-20250514',
     name: 'Claude Sonnet 4',
-    description: 'Fast, high-quality translations',
+    description: 'Fast, high-quality translations - balanced performance',
     inputCostPer1M: 3,
     outputCostPer1M: 15,
   },
   {
     id: 'claude-opus-4-20250514',
     name: 'Claude Opus 4',
-    description: 'Highest quality, complex documents',
+    description: 'Premium quality for complex documents and nuanced translations',
     inputCostPer1M: 15,
     outputCostPer1M: 75,
-  },
-  {
-    id: 'claude-3-5-haiku-20241022',
-    name: 'Claude 3.5 Haiku',
-    description: 'Quick preview translations',
-    inputCostPer1M: 0.8,
-    outputCostPer1M: 4,
   },
 ];
 
 // Project Status
 export type ProjectStatus = 'pending' | 'processing' | 'completed' | 'error';
+
+// Project Priority
+export type ProjectPriority = 'low' | 'medium' | 'high' | 'urgent';
+
+export interface PriorityInfo {
+  id: ProjectPriority;
+  name: string;
+  color: string;
+}
+
+export const PRIORITIES: PriorityInfo[] = [
+  { id: 'low', name: 'Low', color: 'slate' },
+  { id: 'medium', name: 'Medium', color: 'blue' },
+  { id: 'high', name: 'High', color: 'orange' },
+  { id: 'urgent', name: 'Urgent', color: 'red' },
+];
 
 // Segment Status
 export type SegmentStatus = 'pending' | 'translating' | 'translated' | 'approved' | 'error';
@@ -142,6 +151,7 @@ export interface Project {
   targetLanguage: LanguageCode;
   translationStyle: TranslationStyle;
   aiModel: AIModel;
+  customContext: string | null; // Additional instructions for translation (terminology, style, tone, etc.)
   status: ProjectStatus;
   progress: number;
   totalSegments: number;
@@ -150,6 +160,9 @@ export interface Project {
   tokensInput: number;
   tokensOutput: number;
   totalCost: number;
+  dueDate: string | null;
+  priority: ProjectPriority;
+  tags: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -234,6 +247,10 @@ export interface CreateProjectRequest {
   targetLanguage: LanguageCode;
   translationStyle: TranslationStyle;
   aiModel: AIModel;
+  customContext?: string; // Additional instructions for translation
+  dueDate?: string;
+  priority?: ProjectPriority;
+  tags?: string[];
 }
 
 export interface TranslateAllRequest {

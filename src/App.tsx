@@ -3,6 +3,7 @@ import { Toaster } from 'sonner';
 import { useTheme } from './hooks/useTheme';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
+import Projects from './pages/Projects';
 import ProjectView from './pages/ProjectView';
 import NewProject from './pages/NewProject';
 import Glossaries from './pages/Glossaries';
@@ -17,6 +18,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
+          <Route path="projects" element={<Projects />} />
           <Route path="projects/new" element={<NewProject />} />
           <Route path="projects/:id" element={<ProjectView />} />
           <Route path="glossaries" element={<Glossaries />} />

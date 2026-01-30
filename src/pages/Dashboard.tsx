@@ -36,11 +36,11 @@ export default function Dashboard() {
 
   async function loadData() {
     try {
-      const [projectsData, statsData] = await Promise.all([
-        projectsApi.list(),
+      const [projectsResponse, statsData] = await Promise.all([
+        projectsApi.list({ limit: 10, sortBy: 'created_at', sortOrder: 'desc' }),
         configApi.getStats(),
       ]);
-      setProjects(projectsData);
+      setProjects(projectsResponse.projects);
       setStats(statsData);
     } catch (error) {
       toast.error('Failed to load data');
