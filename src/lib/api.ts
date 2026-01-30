@@ -9,7 +9,27 @@ import type {
   TranslationStyleInfo,
   ProjectAnalytics,
   CreateProjectRequest,
+  ProjectPriority,
 } from '@shared/types';
+
+export interface ProjectsListParams {
+  status?: string;
+  priority?: string;
+  sourceLanguage?: string;
+  targetLanguage?: string;
+  search?: string;
+  sortBy?: 'created_at' | 'updated_at' | 'name' | 'due_date' | 'priority' | 'progress' | 'status';
+  sortOrder?: 'asc' | 'desc';
+  limit?: number;
+  offset?: number;
+}
+
+export interface ProjectsListResponse {
+  projects: Project[];
+  total: number;
+  limit: number | null;
+  offset: number;
+}
 
 const API_BASE = '/api';
 
@@ -50,7 +70,18 @@ async function request<T>(
 
 // Projects API
 export const projectsApi = {
-  list: () => request<Project[]>('/projects'),
+  list: (params?: ProjectsListParams) => {
+    const searchParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          searchParams.append(key, String(value));
+        }
+      });
+    }
+    const query = searchParams.toString();
+    return request<ProjectsListResponse>(`/projects${query ? `?${query}` : ''}`);
+  },
 
   get: (id: string) => request<Project>(`/projects/${id}`),
 
@@ -62,6 +93,9 @@ export const projectsApi = {
     formData.append('targetLanguage', data.targetLanguage);
     formData.append('translationStyle', data.translationStyle);
     formData.append('aiModel', data.aiModel);
+    if (data.dueDate) formData.append('dueDate', data.dueDate);
+    if (data.priority) formData.append('priority', data.priority);
+    if (data.tags) formData.append('tags', data.tags.join(','));
 
     const response = await fetch(`${API_BASE}/projects`, {
       method: 'POST',
@@ -75,6 +109,19 @@ export const projectsApi = {
 
     return response.json();
   },
+
+  update: (id: string, data: {
+    name?: string;
+    dueDate?: string | null;
+    priority?: ProjectPriority;
+    tags?: string | null;
+    translationStyle?: string;
+    aiModel?: string;
+  }) =>
+    request<Project>(`/projects/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
 
   delete: (id: string) =>
     request<void>(`/projects/${id}`, { method: 'DELETE' }),

@@ -89,6 +89,22 @@ export const AI_MODELS: AIModelInfo[] = [
 // Project Status
 export type ProjectStatus = 'pending' | 'processing' | 'completed' | 'error';
 
+// Project Priority
+export type ProjectPriority = 'low' | 'medium' | 'high' | 'urgent';
+
+export interface PriorityInfo {
+  id: ProjectPriority;
+  name: string;
+  color: string;
+}
+
+export const PRIORITIES: PriorityInfo[] = [
+  { id: 'low', name: 'Low', color: 'slate' },
+  { id: 'medium', name: 'Medium', color: 'blue' },
+  { id: 'high', name: 'High', color: 'orange' },
+  { id: 'urgent', name: 'Urgent', color: 'red' },
+];
+
 // Segment Status
 export type SegmentStatus = 'pending' | 'translating' | 'translated' | 'approved' | 'error';
 
@@ -150,6 +166,9 @@ export interface Project {
   tokensInput: number;
   tokensOutput: number;
   totalCost: number;
+  dueDate: string | null;
+  priority: ProjectPriority;
+  tags: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -234,6 +253,9 @@ export interface CreateProjectRequest {
   targetLanguage: LanguageCode;
   translationStyle: TranslationStyle;
   aiModel: AIModel;
+  dueDate?: string;
+  priority?: ProjectPriority;
+  tags?: string[];
 }
 
 export interface TranslateAllRequest {
