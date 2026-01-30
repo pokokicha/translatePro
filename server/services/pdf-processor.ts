@@ -13,6 +13,8 @@ interface ExtractedSegment {
  * Segments are extracted with position and style data for layout preservation
  */
 export async function extractPdfContent(filePath: string): Promise<ExtractedSegment[]> {
+  logger.info(`Extracting PDF content from: ${filePath}`);
+
   try {
     // Dynamic import for pdf2json (CommonJS module)
     const PDFParser = (await import('pdf2json')).default;
@@ -22,15 +24,25 @@ export async function extractPdfContent(filePath: string): Promise<ExtractedSegm
 
       pdfParser.on('pdfParser_dataError', (errData: { parserError: Error }) => {
         logger.error('PDF parsing error:', errData.parserError);
-        reject(errData.parserError);
+        // Try fallback method instead of rejecting
+        resolve(extractTextFallback(filePath));
       });
 
       pdfParser.on('pdfParser_dataReady', (pdfData: PDFData) => {
         try {
+          logger.info(`PDF parsed, pages: ${pdfData.Pages?.length || 0}`);
           const segments = extractSegmentsFromPdfData(pdfData);
-          resolve(segments);
+          logger.info(`Extracted ${segments.length} segments from PDF`);
+
+          if (segments.length === 0) {
+            logger.warn('No segments extracted, trying fallback method');
+            resolve(extractTextFallback(filePath));
+          } else {
+            resolve(segments);
+          }
         } catch (error) {
-          reject(error);
+          logger.error('Error extracting segments:', error);
+          resolve(extractTextFallback(filePath));
         }
       });
 
@@ -38,16 +50,79 @@ export async function extractPdfContent(filePath: string): Promise<ExtractedSegm
     });
   } catch (error) {
     logger.error('Failed to extract PDF content:', error);
-    // Fallback: try to read as text
-    try {
-      const content = fs.readFileSync(filePath, 'utf-8');
-      return content
-        .split(/\n\n+/)
-        .filter((text) => text.trim())
-        .map((text) => ({ text: text.trim(), pageNumber: 1 }));
-    } catch {
-      return [];
+    return extractTextFallback(filePath);
+  }
+}
+
+/**
+ * Fallback method to extract text from PDF using raw text parsing
+ */
+function extractTextFallback(filePath: string): ExtractedSegment[] {
+  logger.info('Using fallback text extraction method');
+
+  try {
+    // Read file as buffer and try to extract readable text
+    const buffer = fs.readFileSync(filePath);
+    const content = buffer.toString('utf-8');
+
+    // Extract text between stream markers (PDF text content)
+    const textMatches: string[] = [];
+
+    // Try to find text in PDF streams
+    const streamRegex = /stream\s*([\s\S]*?)\s*endstream/g;
+    let match;
+    while ((match = streamRegex.exec(content)) !== null) {
+      const streamContent = match[1];
+      // Extract text from Tj and TJ operators
+      const tjRegex = /\(([^)]+)\)\s*Tj|\[([^\]]+)\]\s*TJ/g;
+      let tjMatch;
+      while ((tjMatch = tjRegex.exec(streamContent)) !== null) {
+        const text = tjMatch[1] || tjMatch[2];
+        if (text) {
+          // Clean up the text
+          const cleaned = text
+            .replace(/\\([nrt])/g, (_, c) => ({ n: '\n', r: '\r', t: '\t' }[c] || c))
+            .replace(/\\\(/g, '(')
+            .replace(/\\\)/g, ')')
+            .replace(/\\(\d{3})/g, (_, oct) => String.fromCharCode(parseInt(oct, 8)));
+          if (cleaned.trim()) {
+            textMatches.push(cleaned);
+          }
+        }
+      }
     }
+
+    if (textMatches.length > 0) {
+      // Group text into segments (paragraphs)
+      const fullText = textMatches.join(' ');
+      const paragraphs = fullText
+        .split(/\n\s*\n|\r\n\s*\r\n/)
+        .map(p => p.trim())
+        .filter(p => p.length > 0);
+
+      if (paragraphs.length > 0) {
+        logger.info(`Fallback extracted ${paragraphs.length} paragraphs`);
+        return paragraphs.map(text => ({ text, pageNumber: 1 }));
+      }
+
+      // If no paragraph breaks, split by sentences
+      if (fullText.trim()) {
+        logger.info('Using sentence-based splitting');
+        const sentences = fullText
+          .split(/(?<=[.!?])\s+/)
+          .filter(s => s.trim().length > 0);
+
+        return sentences.length > 0
+          ? sentences.map(text => ({ text: text.trim(), pageNumber: 1 }))
+          : [{ text: fullText.trim(), pageNumber: 1 }];
+      }
+    }
+
+    logger.warn('No text found in PDF using fallback method');
+    return [];
+  } catch (error) {
+    logger.error('Fallback extraction failed:', error);
+    return [];
   }
 }
 
