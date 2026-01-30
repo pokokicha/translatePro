@@ -40,6 +40,7 @@ export default function ProjectView() {
     translationStyle: '' as TranslationStyle,
     aiModel: '' as AIModel,
     customContext: '',
+    dueDate: '',
   });
 
   useEffect(() => {
@@ -53,6 +54,7 @@ export default function ProjectView() {
         translationStyle: currentProject.translationStyle,
         aiModel: currentProject.aiModel,
         customContext: currentProject.customContext || '',
+        dueDate: currentProject.dueDate || '',
       });
     }
   }, [currentProject?.id]);
@@ -159,6 +161,7 @@ export default function ProjectView() {
         translationStyle: settingsForm.translationStyle,
         aiModel: settingsForm.aiModel,
         customContext: settingsForm.customContext || null,
+        dueDate: settingsForm.dueDate || null,
       });
       setCurrentProject(updated);
       toast.success('Settings saved');
@@ -354,6 +357,17 @@ export default function ProjectView() {
                   <p className="text-xs text-slate-500 mt-1">
                     These instructions will be included in every translation request for this project.
                   </p>
+                </div>
+
+                {/* Due Date */}
+                <div>
+                  <label className="label">Due Date</label>
+                  <input
+                    type="date"
+                    value={settingsForm.dueDate ? settingsForm.dueDate.split('T')[0] : ''}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, dueDate: e.target.value })}
+                    className="input"
+                  />
                 </div>
 
                 {/* Save Button */}
