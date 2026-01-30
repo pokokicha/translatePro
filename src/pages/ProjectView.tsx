@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play,
   Download,
@@ -11,11 +11,16 @@ import {
   RefreshCw,
   CheckCircle,
   AlertCircle,
+  Settings,
+  ChevronDown,
+  ChevronUp,
+  Save,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { projectsApi, segmentsApi, translationApi } from '../lib/api';
 import { useStore } from '../store/useStore';
-import type { Segment, TranslationProgress } from '@shared/types';
+import { TRANSLATION_STYLES, AI_MODELS } from '@shared/types';
+import type { Segment, TranslationProgress, TranslationStyle, AIModel } from '@shared/types';
 
 export default function ProjectView() {
   const { id } = useParams<{ id: string }>();
@@ -28,9 +33,29 @@ export default function ProjectView() {
   const [selectedSegment, setSelectedSegment] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
 
+  // Settings panel state
+  const [showSettings, setShowSettings] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsForm, setSettingsForm] = useState({
+    translationStyle: '' as TranslationStyle,
+    aiModel: '' as AIModel,
+    customContext: '',
+  });
+
   useEffect(() => {
     if (id) loadProject(id);
   }, [id]);
+
+  // Initialize settings form when project loads
+  useEffect(() => {
+    if (currentProject) {
+      setSettingsForm({
+        translationStyle: currentProject.translationStyle,
+        aiModel: currentProject.aiModel,
+        customContext: currentProject.customContext || '',
+      });
+    }
+  }, [currentProject?.id]);
 
   async function loadProject(projectId: string) {
     setLoading(true);
@@ -122,6 +147,25 @@ export default function ProjectView() {
       toast.success('Segment retranslated');
     } catch (error) {
       toast.error('Failed to retranslate');
+    }
+  }
+
+  async function handleSaveSettings() {
+    if (!id || !currentProject) return;
+
+    setSavingSettings(true);
+    try {
+      const updated = await projectsApi.update(id, {
+        translationStyle: settingsForm.translationStyle,
+        aiModel: settingsForm.aiModel,
+        customContext: settingsForm.customContext || null,
+      });
+      setCurrentProject(updated);
+      toast.success('Settings saved');
+    } catch (error) {
+      toast.error('Failed to save settings');
+    } finally {
+      setSavingSettings(false);
     }
   }
 
@@ -235,6 +279,107 @@ export default function ProjectView() {
           <p className="text-sm text-slate-500 dark:text-slate-400">Total Cost</p>
           <p className="text-2xl font-bold">${currentProject.totalCost.toFixed(4)}</p>
         </div>
+      </div>
+
+      {/* Translation Settings */}
+      <div className="card">
+        <button
+          onClick={() => setShowSettings(!showSettings)}
+          className="w-full p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <Settings className="w-5 h-5 text-slate-500" />
+            <div className="text-left">
+              <h3 className="font-semibold">Translation Settings</h3>
+              <p className="text-sm text-slate-500">
+                {TRANSLATION_STYLES.find(s => s.id === currentProject.translationStyle)?.name} • {AI_MODELS.find(m => m.id === currentProject.aiModel)?.name}
+                {currentProject.customContext && ' • Custom instructions set'}
+              </p>
+            </div>
+          </div>
+          {showSettings ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
+        </button>
+
+        <AnimatePresence>
+          {showSettings && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <div className="p-4 pt-0 space-y-4 border-t">
+                {/* Translation Style */}
+                <div>
+                  <label className="label">Translation Style</label>
+                  <select
+                    value={settingsForm.translationStyle}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, translationStyle: e.target.value as TranslationStyle })}
+                    className="input"
+                  >
+                    {TRANSLATION_STYLES.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name} - {s.description}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* AI Model */}
+                <div>
+                  <label className="label">AI Model</label>
+                  <select
+                    value={settingsForm.aiModel}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, aiModel: e.target.value as AIModel })}
+                    className="input"
+                  >
+                    {AI_MODELS.map((m) => (
+                      <option key={m.id} value={m.id}>{m.name} - {m.description}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Cost: ${AI_MODELS.find(m => m.id === settingsForm.aiModel)?.inputCostPer1M}/1M input, ${AI_MODELS.find(m => m.id === settingsForm.aiModel)?.outputCostPer1M}/1M output tokens
+                  </p>
+                </div>
+
+                {/* Custom Context */}
+                <div>
+                  <label className="label">Custom Instructions</label>
+                  <textarea
+                    value={settingsForm.customContext}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, customContext: e.target.value })}
+                    placeholder="Add additional context for the AI translator. For example: specific terminology, preferred tone, style guidelines, subject matter context, or any special instructions that should be applied to all translations in this project..."
+                    rows={4}
+                    className="input resize-none"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    These instructions will be included in every translation request for this project.
+                  </p>
+                </div>
+
+                {/* Save Button */}
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleSaveSettings}
+                    disabled={savingSettings}
+                    className="btn-primary"
+                  >
+                    {savingSettings ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        Save Settings
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Segments List */}
