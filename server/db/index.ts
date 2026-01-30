@@ -45,6 +45,15 @@ function runMigrations(database: Database.Database): void {
       // Column might already exist
     }
   }
+
+  if (!columnNames.includes('custom_context')) {
+    try {
+      database.exec("ALTER TABLE projects ADD COLUMN custom_context TEXT");
+      logger.info('Migration: Added custom_context column to projects');
+    } catch (error) {
+      // Column might already exist
+    }
+  }
 }
 
 export function initializeDb(): Database.Database {

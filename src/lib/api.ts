@@ -93,6 +93,7 @@ export const projectsApi = {
     formData.append('targetLanguage', data.targetLanguage);
     formData.append('translationStyle', data.translationStyle);
     formData.append('aiModel', data.aiModel);
+    if (data.customContext) formData.append('customContext', data.customContext);
     if (data.dueDate) formData.append('dueDate', data.dueDate);
     if (data.priority) formData.append('priority', data.priority);
     if (data.tags) formData.append('tags', data.tags.join(','));
@@ -117,6 +118,7 @@ export const projectsApi = {
     tags?: string | null;
     translationStyle?: string;
     aiModel?: string;
+    customContext?: string | null;
   }) =>
     request<Project>(`/projects/${id}`, {
       method: 'PUT',

@@ -60,8 +60,8 @@ const createProjectSchema = z.object({
   aiModel: z.enum([
     'claude-sonnet-4-20250514',
     'claude-opus-4-20250514',
-    'claude-3-5-haiku-20241022',
   ]).default('claude-sonnet-4-20250514'),
+  customContext: z.string().optional(), // Additional instructions for translation
   dueDate: z.string().optional(),
   priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
   tags: z.string().optional(), // comma-separated tags
@@ -79,8 +79,8 @@ const updateProjectSchema = z.object({
   aiModel: z.enum([
     'claude-sonnet-4-20250514',
     'claude-opus-4-20250514',
-    'claude-3-5-haiku-20241022',
   ]).optional(),
+  customContext: z.string().nullable().optional(),
 });
 
 // Helper to map DB row to Project type
@@ -95,6 +95,7 @@ function mapRowToProject(row: Record<string, unknown>): Project {
     targetLanguage: row.target_language as Project['targetLanguage'],
     translationStyle: row.translation_style as Project['translationStyle'],
     aiModel: row.ai_model as Project['aiModel'],
+    customContext: row.custom_context as string | null,
     status: row.status as Project['status'],
     progress: row.progress as number,
     totalSegments: row.total_segments as number,
@@ -240,7 +241,7 @@ router.post('/', upload.single('file'), async (req: Request, res: Response) => {
       return;
     }
 
-    const { name, sourceLanguage, targetLanguage, translationStyle, aiModel, dueDate, priority, tags } = validation.data;
+    const { name, sourceLanguage, targetLanguage, translationStyle, aiModel, customContext, dueDate, priority, tags } = validation.data;
 
     // Determine file type
     const ext = path.extname(req.file.originalname).toLowerCase();
@@ -257,8 +258,8 @@ router.post('/', upload.single('file'), async (req: Request, res: Response) => {
       INSERT INTO projects (
         id, name, file_name, file_type, file_size, file_path,
         source_language, target_language, translation_style, ai_model,
-        due_date, priority, tags
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        custom_context, due_date, priority, tags
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       projectId,
       name,
@@ -270,6 +271,7 @@ router.post('/', upload.single('file'), async (req: Request, res: Response) => {
       targetLanguage,
       translationStyle,
       aiModel,
+      customContext || null,
       dueDate || null,
       priority,
       tags || null
@@ -377,6 +379,10 @@ router.put('/:id', (req: Request, res: Response) => {
     if (updates.aiModel !== undefined) {
       setClauses.push('ai_model = ?');
       params.push(updates.aiModel);
+    }
+    if (updates.customContext !== undefined) {
+      setClauses.push('custom_context = ?');
+      params.push(updates.customContext);
     }
 
     if (setClauses.length === 0) {

@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS projects (
   target_language TEXT NOT NULL,
   translation_style TEXT NOT NULL DEFAULT 'standard',
   ai_model TEXT NOT NULL DEFAULT 'claude-sonnet-4-20250514',
+  custom_context TEXT,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'error')),
   progress REAL NOT NULL DEFAULT 0,
   total_segments INTEGER NOT NULL DEFAULT 0,

@@ -20,7 +20,6 @@ const translateSegmentSchema = z.object({
   aiModel: z.enum([
     'claude-sonnet-4-20250514',
     'claude-opus-4-20250514',
-    'claude-3-5-haiku-20241022',
   ]).optional(),
   style: z.enum([
     'standard', 'formal', 'informal', 'technical', 'legal',
@@ -119,7 +118,8 @@ router.post('/projects/:id/translate-all', async (req: Request, res: Response) =
           project.target_language as string,
           project.ai_model as string,
           project.translation_style as string,
-          glossaryTerms
+          glossaryTerms,
+          project.custom_context as string | null
         );
 
         // Update segments in database
@@ -243,7 +243,7 @@ router.post('/segments/:id', async (req: Request, res: Response) => {
 
     const db = getDb();
     const segment = db.prepare(`
-      SELECT s.*, p.source_language, p.target_language, p.ai_model, p.translation_style
+      SELECT s.*, p.source_language, p.target_language, p.ai_model, p.translation_style, p.custom_context
       FROM segments s
       JOIN projects p ON s.project_id = p.id
       WHERE s.id = ?
@@ -268,7 +268,9 @@ router.post('/segments/:id', async (req: Request, res: Response) => {
       segment.source_language as string,
       segment.target_language as string,
       aiModel,
-      style
+      style,
+      undefined,
+      segment.custom_context as string | null
     );
 
     // Save previous text if exists
@@ -316,7 +318,7 @@ router.get('/suggestions/:id', async (req: Request, res: Response) => {
   try {
     const db = getDb();
     const segment = db.prepare(`
-      SELECT s.*, p.source_language, p.target_language, p.translation_style
+      SELECT s.*, p.source_language, p.target_language, p.translation_style, p.custom_context
       FROM segments s
       JOIN projects p ON s.project_id = p.id
       WHERE s.id = ?
@@ -336,8 +338,10 @@ router.get('/suggestions/:id', async (req: Request, res: Response) => {
             segment.source_text as string,
             segment.source_language as string,
             segment.target_language as string,
-            'claude-3-5-haiku-20241022', // Use Haiku for quick suggestions
-            style
+            'claude-sonnet-4-20250514', // Use Sonnet for suggestions
+            style,
+            undefined,
+            segment.custom_context as string | null
           );
           return {
             style,

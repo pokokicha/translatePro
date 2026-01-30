@@ -22,8 +22,8 @@ import {
 import { format, formatDistanceToNow, isPast, isToday } from 'date-fns';
 import { toast } from 'sonner';
 import { projectsApi, ProjectsListParams } from '../lib/api';
-import { LANGUAGES, PRIORITIES } from '@shared/types';
-import type { Project, ProjectPriority, ProjectStatus } from '@shared/types';
+import { LANGUAGES, PRIORITIES, TRANSLATION_STYLES, AI_MODELS } from '@shared/types';
+import type { Project, ProjectPriority, ProjectStatus, TranslationStyle, AIModel } from '@shared/types';
 
 const statusConfig: Record<ProjectStatus, { icon: typeof Clock; color: string; bg: string; label: string }> = {
   pending: { icon: Clock, color: 'text-slate-500', bg: 'bg-slate-100 dark:bg-slate-700', label: 'Pending' },
@@ -109,13 +109,16 @@ export default function Projects() {
     }
   }
 
-  async function handleUpdateProject(id: string, updates: Partial<Project>) {
+  async function handleUpdateProject(id: string, updates: Partial<Project> & { customContext?: string | null }) {
     try {
       const updated = await projectsApi.update(id, {
         name: updates.name,
         dueDate: updates.dueDate,
         priority: updates.priority,
         tags: updates.tags?.join(','),
+        translationStyle: updates.translationStyle,
+        aiModel: updates.aiModel,
+        customContext: updates.customContext,
       });
       setProjects((prev) => prev.map((p) => (p.id === id ? updated : p)));
       setEditingProject(null);
@@ -456,12 +459,15 @@ function EditProjectModal({
 }: {
   project: Project;
   onClose: () => void;
-  onSave: (updates: Partial<Project>) => void;
+  onSave: (updates: Partial<Project> & { customContext?: string | null }) => void;
 }) {
   const [name, setName] = useState(project.name);
   const [dueDate, setDueDate] = useState(project.dueDate || '');
   const [priority, setPriority] = useState<ProjectPriority>(project.priority);
   const [tagsInput, setTagsInput] = useState(project.tags.join(', '));
+  const [translationStyle, setTranslationStyle] = useState<TranslationStyle>(project.translationStyle);
+  const [aiModel, setAiModel] = useState<AIModel>(project.aiModel);
+  const [customContext, setCustomContext] = useState(project.customContext || '');
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -471,6 +477,9 @@ function EditProjectModal({
       dueDate: dueDate || null,
       priority,
       tags: tagsInput.split(',').map((t) => t.trim()).filter(Boolean),
+      translationStyle,
+      aiModel,
+      customContext: customContext || null,
     });
     setSaving(false);
   };
@@ -488,10 +497,10 @@ function EditProjectModal({
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md card p-6 z-50"
+        className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg max-h-[90vh] overflow-y-auto card p-6 z-50"
       >
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold">Edit Project</h3>
+          <h3 className="text-lg font-semibold">Edit Project Settings</h3>
           <button onClick={onClose} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded">
             <X className="w-5 h-5" />
           </button>
@@ -508,27 +517,69 @@ function EditProjectModal({
             />
           </div>
 
-          <div>
-            <label className="label">Due Date</label>
-            <input
-              type="date"
-              value={dueDate ? dueDate.split('T')[0] : ''}
-              onChange={(e) => setDueDate(e.target.value)}
-              className="input"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label">Due Date</label>
+              <input
+                type="date"
+                value={dueDate ? dueDate.split('T')[0] : ''}
+                onChange={(e) => setDueDate(e.target.value)}
+                className="input"
+              />
+            </div>
+
+            <div>
+              <label className="label">Priority</label>
+              <select
+                value={priority}
+                onChange={(e) => setPriority(e.target.value as ProjectPriority)}
+                className="input"
+              >
+                {PRIORITIES.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div>
-            <label className="label">Priority</label>
+            <label className="label">Translation Style</label>
             <select
-              value={priority}
-              onChange={(e) => setPriority(e.target.value as ProjectPriority)}
+              value={translationStyle}
+              onChange={(e) => setTranslationStyle(e.target.value as TranslationStyle)}
               className="input"
             >
-              {PRIORITIES.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
+              {TRANSLATION_STYLES.map((s) => (
+                <option key={s.id} value={s.id}>{s.name} - {s.description}</option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label className="label">AI Model</label>
+            <select
+              value={aiModel}
+              onChange={(e) => setAiModel(e.target.value as AIModel)}
+              className="input"
+            >
+              {AI_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>{m.name} - {m.description}</option>
+              ))}
+            </select>
+            <p className="text-xs text-slate-500 mt-1">
+              Cost: ${AI_MODELS.find((m) => m.id === aiModel)?.inputCostPer1M}/1M input, ${AI_MODELS.find((m) => m.id === aiModel)?.outputCostPer1M}/1M output tokens
+            </p>
+          </div>
+
+          <div>
+            <label className="label">Custom Instructions</label>
+            <textarea
+              value={customContext}
+              onChange={(e) => setCustomContext(e.target.value)}
+              placeholder="Add additional context for translations: terminology, tone, style guidelines..."
+              rows={3}
+              className="input resize-none"
+            />
           </div>
 
           <div>

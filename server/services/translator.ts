@@ -44,7 +44,8 @@ export async function translateText(
   targetLanguage: string,
   model: string,
   style: string,
-  glossaryTerms?: Map<string, string>
+  glossaryTerms?: Map<string, string>,
+  customContext?: string | null
 ): Promise<TranslationResult> {
   const sourceLang = getLanguageName(sourceLanguage);
   const targetLang = getLanguageName(targetLanguage);
@@ -63,9 +64,15 @@ export async function translateText(
     }
   }
 
+  // Include custom context if provided
+  let customContextBlock = '';
+  if (customContext && customContext.trim()) {
+    customContextBlock = `\n\nAdditional context and instructions from the user:\n${customContext.trim()}`;
+  }
+
   const systemPrompt = `You are a professional translator. Translate the following text from ${sourceLang} to ${targetLang}.
 
-${stylePrompt}${glossaryContext}
+${stylePrompt}${glossaryContext}${customContextBlock}
 
 Important instructions:
 - Translate ONLY the text, do not add explanations or notes
@@ -108,7 +115,8 @@ export async function translateBatch(
   targetLanguage: string,
   model: string,
   style: string,
-  glossaryTerms?: Map<string, string>
+  glossaryTerms?: Map<string, string>,
+  customContext?: string | null
 ): Promise<TranslationResult[]> {
   const sourceLang = getLanguageName(sourceLanguage);
   const targetLang = getLanguageName(targetLanguage);
@@ -129,9 +137,15 @@ export async function translateBatch(
     }
   }
 
+  // Include custom context if provided
+  let customContextBlock = '';
+  if (customContext && customContext.trim()) {
+    customContextBlock = `\n\nAdditional context and instructions from the user:\n${customContext.trim()}`;
+  }
+
   const systemPrompt = `You are a professional translator. Translate texts from ${sourceLang} to ${targetLang}.
 
-${stylePrompt}${glossaryContext}
+${stylePrompt}${glossaryContext}${customContextBlock}
 
 Important instructions:
 - Translate each segment separately
